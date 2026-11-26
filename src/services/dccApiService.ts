@@ -22,9 +22,10 @@ import {
  * JSON API service layer for DCC rules.
  *
  * Talks REST-style JSON to `${VITE_API_BASE_URL}/dcc/rules` (the Vite dev-server
- * middleware). Falls back to a localStorage-backed in-browser store when the
- * API is unreachable (e.g. static preview), keeping runtime state synchronized
- * under the key below so Create / Update / Delete work during demos.
+ * middleware or an external ngrok backend). On a published static build the
+ * `/api` path has no server behind it: responses are 404 or the SPA's own
+ * HTML. Those cases are detected safely (never parsed as JSON) and fall back
+ * to a localStorage-backed store seeded from the bundled JSON files.
  */
 
 const API_BASE: string = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || '/api';
@@ -58,12 +59,53 @@ function record(method: string, url: string, status: number, body?: unknown) {
   notify();
 }
 
+// ---- Safe response parsing ----
+
+type ParsedJson = { ok: true; data: unknown } | { ok: false };
+
+/**
+ * Reads a response as text first and detects HTML / non-JSON payloads (what a
+ * static host returns for /api routes) instead of letting JSON.parse throw
+ * "Unexpected token '<'". Anything not confidently JSON reports `ok: false`.
+ */
+async function parseJsonOrDetectHtml(res: Response): Promise<ParsedJson> {
+  const text = await res.text();
+  const trimmed = text.trim();
+  if (!trimmed) return { ok: false };
+  const head = trimmed.slice(0, 64).toLowerCase();
+  if (head.startsWith('<')) return { ok: false };
+  const ctype = (res.headers.get('content-type') ?? '').toLowerCase();
+  if (ctype.includes('text/html')) return { ok: false };
+  try {
+    return { ok: true, data: JSON.parse(trimmed) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function errorOf(data: unknown): string | null {
+  if (data && typeof data === 'object' && 'error' in data) {
+    const msg = (data as { error: unknown }).error;
+    if (typeof msg === 'string') return msg;
+  }
+  return null;
+}
+
+/** Fetches a bundled JSON file under the app's base path, safely parsed. */
+async function fetchStaticJson(path: string): Promise<unknown> {
+  const res = await fetch(`${import.meta.env.BASE_URL}${path}`);
+  const parsed = await parseJsonOrDetectHtml(res);
+  if (!res.ok || !parsed.ok) throw new Error(`GET ${path} failed (${res.status})`);
+  return parsed.data;
+}
+
 // ---- localStorage fallback store ----
 
 function lsRead(): DccRule[] | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    return raw ? (JSON.parse(raw).rules as DccRule[]) : null;
+    const parsed = raw ? (JSON.parse(raw) as { rules?: DccRule[] }) : null;
+    return parsed && Array.isArray(parsed.rules) ? parsed.rules : null;
   } catch {
     return null;
   }
@@ -73,69 +115,52 @@ function lsWrite(rules: DccRule[]) {
   localStorage.setItem(LS_KEY, JSON.stringify({ updatedAt: new Date().toISOString(), rules }));
 }
 
-async function lsSeed(): Promise<DccRule[]> {
-  const res = await fetch(`${import.meta.env.BASE_URL}data/dcc-rules.json`);
-  const json = await res.json();
-  return (json.rules ?? []) as DccRule[];
-}
-
-async function localRequest(method: string, ruleNo: string | null, body?: unknown): Promise<Response> {
-  let rules = lsRead();
-  if (!rules) {
-    rules = await lsSeed();
-    lsWrite(rules);
+/** localStorage rules if present; otherwise seeds it from the bundled JSON file. */
+async function lsLoad(): Promise<DccRule[]> {
+  const existing = lsRead();
+  if (existing) return existing;
+  let seeded: DccRule[] = [];
+  try {
+    const json = (await fetchStaticJson('data/dcc-rules.json')) as { rules?: DccRule[] };
+    seeded = json.rules ?? [];
+  } catch {
+    seeded = [];
   }
-  const json = (data: unknown, status = 200) =>
-    new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
-
-  if (method === 'GET' && !ruleNo) return json({ data: rules, count: rules.length, total: rules.length });
-  if (method === 'GET' && ruleNo) {
-    const rule = rules.find((r) => r.generationRuleNo === ruleNo);
-    return rule ? json({ data: rule }) : json({ error: `Rule ${ruleNo} not found` }, 404);
-  }
-  if (method === 'POST' && !ruleNo) {
-    const payload = body as DccRule;
-    if (rules.some((r) => r.generationRuleNo === payload.generationRuleNo))
-      return json({ error: `Rule ${payload.generationRuleNo} already exists` }, 409);
-    rules = [...rules, payload];
-    lsWrite(rules);
-    return json({ data: payload }, 201);
-  }
-  if (method === 'PUT' && ruleNo) {
-    const idx = rules.findIndex((r) => r.generationRuleNo === ruleNo);
-    if (idx === -1) return json({ error: `Rule ${ruleNo} not found` }, 404);
-    rules[idx] = { ...rules[idx], ...(body as object), generationRuleNo: ruleNo };
-    lsWrite(rules);
-    return json({ data: rules[idx] });
-  }
-  if (method === 'DELETE' && ruleNo) {
-    const removed = rules.find((r) => r.generationRuleNo === ruleNo);
-    if (!removed) return json({ error: `Rule ${ruleNo} not found` }, 404);
-    lsWrite(rules.filter((r) => r.generationRuleNo !== ruleNo));
-    return json({ data: removed });
-  }
-  return json({ error: 'Unsupported operation' }, 405);
+  lsWrite(seeded);
+  return seeded;
 }
 
 // ---- REST calls ----
 
-async function request(method: string, ruleNo: string | null, body?: unknown): Promise<Response> {
-  const url = `${API_BASE}/dcc/rules${ruleNo ? `/${encodeURIComponent(ruleNo)}` : ''}`;
+/**
+ * Performs one API call. Returns `{ status, data }` when the endpoint answered
+ * with parseable JSON, or `null` when there is no backend behind the path
+ * (network failure, 404 HTML page, non-JSON body).
+ */
+async function apiFetch(method: string, path: string, body?: unknown): Promise<{ status: number; data: unknown } | null> {
+  const url = `${API_BASE}${path}`;
   try {
     const res = await fetch(url, {
       method,
       headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    record(method, url, res.status, body);
-    // Trust the API's answer, including business errors like 409/404 — do not
-    // shadow it with the local store. Fall back only when no server responds.
-    return res;
+    const parsed = await parseJsonOrDetectHtml(res);
+    record(method, url, parsed.ok ? res.status : 0, body);
+    return parsed.ok ? { status: res.status, data: parsed.data } : null;
   } catch {
-    const local = await localRequest(method, ruleNo, body);
-    record(`${method} (local)`, `local:${url}`, local.status, body);
-    return local;
+    record(method, url, 0, body);
+    return null;
   }
+}
+
+function filterBySearch(rules: DccRule[], search?: string): DccRule[] {
+  if (!search) return rules;
+  const s = search.toLowerCase();
+  return rules.filter((r) =>
+    [r.generationRuleNo, r.targetObject, r.targetObjectId, r.demandType, r.tpaUrlId]
+      .some((v) => String(v ?? '').toLowerCase().includes(s)),
+  );
 }
 
 export interface RuleQuery {
@@ -143,52 +168,69 @@ export interface RuleQuery {
 }
 
 export async function listRules(query?: RuleQuery): Promise<DccRule[]> {
-  const params = new URLSearchParams();
-  if (query?.search) params.set('search', query.search);
-  const qs = params.toString();
-  const res = await request('GET', null);
-  if (!res.ok) throw new Error(`GET rules failed (${res.status})`);
-  const json = await res.json();
-  let rules: DccRule[] = json.data ?? [];
-  // Local filtering for search when the active endpoint does not filter.
-  if (query?.search) {
-    const s = query.search.toLowerCase();
-    rules = rules.filter((r) =>
-      [r.generationRuleNo, r.targetObject, r.targetObjectId, r.demandType, r.tpaUrlId]
-        .some((v) => String(v ?? '').toLowerCase().includes(s)),
-    );
+  const qs = query?.search ? `?search=${encodeURIComponent(query.search)}` : '';
+  const res = await apiFetch('GET', `/dcc/rules${qs}`);
+  if (!res || res.status === 404) {
+    record('GET (local)', 'local:/dcc/rules', 200);
+    return filterBySearch(await lsLoad(), query?.search);
   }
-  void qs;
-  return rules;
+  if (res.status >= 400) throw new Error(errorOf(res.data) ?? `GET rules failed (${res.status})`);
+  const data = (res.data as { data?: DccRule[] }).data ?? [];
+  return filterBySearch(data, query?.search);
 }
 
 export async function getRule(ruleNo: string): Promise<DccRule> {
-  const res = await request('GET', ruleNo);
-  if (!res.ok) throw new Error(`GET rule failed (${res.status})`);
-  const json = await res.json();
-  return json.data as DccRule;
+  const res = await apiFetch('GET', `/dcc/rules/${encodeURIComponent(ruleNo)}`);
+  if (!res) {
+    record('GET (local)', `local:/dcc/rules/${ruleNo}`, 200);
+    const rule = (await lsLoad()).find((r) => r.generationRuleNo === ruleNo);
+    if (!rule) throw new Error(`Rule ${ruleNo} not found`);
+    return rule;
+  }
+  if (res.status >= 400) throw new Error(errorOf(res.data) ?? `GET rule failed (${res.status})`);
+  return (res.data as { data: DccRule }).data;
 }
 
 export async function createRule(rule: DccRule): Promise<DccRule> {
-  const res = await request('POST', null, rule);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Create failed (${res.status})`);
-  return json.data as DccRule;
+  const res = await apiFetch('POST', '/dcc/rules', rule);
+  if (!res) {
+    const rules = await lsLoad();
+    if (rules.some((r) => r.generationRuleNo === rule.generationRuleNo))
+      throw new Error(`Rule ${rule.generationRuleNo} already exists`);
+    lsWrite([...rules, rule]);
+    record('POST (local)', 'local:/dcc/rules', 201, rule);
+    return rule;
+  }
+  if (res.status >= 400) throw new Error(errorOf(res.data) ?? `Create failed (${res.status})`);
+  return (res.data as { data: DccRule }).data;
 }
 
 export async function updateRule(ruleNo: string, rule: Partial<DccRule>): Promise<DccRule> {
-  const res = await request('PUT', ruleNo, rule);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Update failed (${res.status})`);
-  return json.data as DccRule;
+  const res = await apiFetch('PUT', `/dcc/rules/${encodeURIComponent(ruleNo)}`, rule);
+  if (!res) {
+    const rules = await lsLoad();
+    const idx = rules.findIndex((r) => r.generationRuleNo === ruleNo);
+    if (idx === -1) throw new Error(`Rule ${ruleNo} not found`);
+    const updated = { ...rules[idx], ...rule, generationRuleNo: ruleNo };
+    rules[idx] = updated;
+    lsWrite(rules);
+    record('PUT (local)', `local:/dcc/rules/${ruleNo}`, 200, rule);
+    return updated;
+  }
+  if (res.status >= 400) throw new Error(errorOf(res.data) ?? `Update failed (${res.status})`);
+  return (res.data as { data: DccRule }).data;
 }
 
 export async function deleteRule(ruleNo: string): Promise<void> {
-  const res = await request('DELETE', ruleNo);
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    throw new Error(json.error ?? `Delete failed (${res.status})`);
+  const res = await apiFetch('DELETE', `/dcc/rules/${encodeURIComponent(ruleNo)}`);
+  if (!res) {
+    const rules = await lsLoad();
+    if (!rules.some((r) => r.generationRuleNo === ruleNo)) throw new Error(`Rule ${ruleNo} not found`);
+    lsWrite(rules.filter((r) => r.generationRuleNo !== ruleNo));
+    record('DELETE (local)', `local:/dcc/rules/${ruleNo}`, 200);
+    return;
   }
+  if (res.status >= 400) throw new Error(errorOf(res.data) ?? `Delete failed (${res.status})`);
 }
 
 export function nextRuleSuggestion(rules: DccRule[]): string {
@@ -205,9 +247,9 @@ export async function sendExternalPayload(payload: unknown, targetPath = '/dcc/r
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const body = await res.json().catch(() => null);
-    record('POST (tester)', url, res.status, payload);
-    return { ok: res.ok, status: res.status, body };
+    const parsed = await parseJsonOrDetectHtml(res);
+    record('POST (tester)', url, parsed.ok ? res.status : 0, payload);
+    return { ok: res.ok && parsed.ok, status: parsed.ok ? res.status : 0, body: parsed.ok ? parsed.data : { error: 'Non-JSON response (no API at this path)' } };
   } catch (e) {
     record('POST (tester)', url, 0, payload);
     return { ok: false, status: 0, body: { error: String(e) } };
@@ -246,12 +288,6 @@ export const DEFAULT_LOOKUPS: DccLookups = {
   percentBases: [...PERCENT_BASES],
 };
 
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`GET ${url} failed (${res.status})`);
-  return res.json();
-}
-
 function mergeLookups(raw: unknown): DccLookups {
   const j = (raw ?? {}) as Record<string, unknown>;
   const arr = (key: keyof DccLookups): unknown[] => (Array.isArray(j[key]) ? (j[key] as unknown[]) : []);
@@ -278,22 +314,19 @@ function mergeLookups(raw: unknown): DccLookups {
 }
 
 /**
- * Loads dropdown option lists. Tries GET {API_BASE}/dcc/lookups first; when
- * unreachable, falls back to the bundled public/data/dcc-lookups.json; any key
- * missing from either source falls back to the built-in constants.
+ * Loads dropdown option lists. Tries GET {API_BASE}/dcc/lookups first; a 404,
+ * HTML or non-JSON answer (static build) or network failure falls back to the
+ * bundled public/data/dcc-lookups.json; any key still missing falls back to
+ * the built-in constants.
  */
 export async function getLookups(): Promise<{ lookups: DccLookups; source: 'api' | 'file' | 'default' }> {
+  const res = await apiFetch('GET', '/dcc/lookups');
+  if (res && res.status === 200) return { lookups: mergeLookups(res.data), source: 'api' };
   try {
-    const raw = await fetchJson(`${API_BASE}/dcc/lookups`);
-    return { lookups: mergeLookups(raw), source: 'api' };
-  } catch (apiErr) {
-    record('GET (lookups)', `${API_BASE}/dcc/lookups`, 0);
-    try {
-      const raw = await fetchJson(`${import.meta.env.BASE_URL}data/dcc-lookups.json`);
-      return { lookups: mergeLookups(raw), source: 'file' };
-    } catch {
-      console.error('Lookup loading fell back to built-in defaults:', apiErr);
-      return { lookups: DEFAULT_LOOKUPS, source: 'default' };
-    }
+    const raw = await fetchStaticJson('data/dcc-lookups.json');
+    return { lookups: mergeLookups(raw), source: 'file' };
+  } catch (err) {
+    console.error('Lookup loading fell back to built-in defaults:', err);
+    return { lookups: DEFAULT_LOOKUPS, source: 'default' };
   }
 }
