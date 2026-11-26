@@ -1,0 +1,657 @@
+openapi: 3.0.3
+info:
+  title: DCC Rules API
+  version: 1.0.0
+  description: |
+    JSON REST API for the Demand & Collection Center (DCC) rule store.
+
+    Base URL is `{VITE_API_BASE_URL}` (defaults to `/api`). Every path below is
+    relative to that base, e.g. `GET /api/dcc/rules`.
+
+    Fallback behaviour: when no server responds at all (network error or
+    static preview without the dev middleware) the client transparently
+    serves the same contract from a localStorage-backed store seeded with
+    `public/data/dcc-rules.json`. Business responses from a reachable API —
+    including 404 and 409 — are always shown as-is; the local store never
+    shadows them. After every successful Create, Update or Delete the client
+    re-fetches `GET /dcc/rules` so the summary table reflects the file on
+    disk.
+
+    Generation frequency codes:
+      99 = Ad hoc TPA (next run 999999) · 98 = Ad hoc Excel (999998) ·
+      95 = Instalment · 01–30 Monthly · 41–47 Daily · 51–57 Weekly ·
+      70 Fortnightly · 75 Quarterly · 80/81 Yearly · 89 Fixed date
+servers:
+  - url: '{VITE_API_BASE_URL}'
+    variables:
+      VITE_API_BASE_URL:
+        default: /api
+tags:
+  - name: DCC Rules
+    description: Create, read, update and delete DCC demand generation rules
+paths:
+  /dcc/rules:
+    get:
+      tags: [DCC Rules]
+      summary: List all rules
+      operationId: listRules
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Free-text filter. The client applies it locally against generationRuleNo, targetObject, targetObjectId, demandType and tpaUrlId.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rule list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleListResponse'
+              example:
+                count: 2
+                total: 2
+                data:
+                  - $ref: '#/components/examples/DCC-R-0001/value'
+                  - generationRuleNo: DCC-R-0005
+                    status: Inactive
+                    targetObject: Property
+                    targetObjectId: PROP-10114
+                    demandType: Insurance
+                    generationFrequencyCode: '99'
+                    demandAmount: 6400
+                    gstPercent: 12
+                    dueDateRefSource: TPA
+                    gracePeriodDays: 0
+                    increaseApplicationMonths: null
+                    increasePercent: null
+                    increaseMin: null
+                    increaseMax: null
+                    increaseAlertCriteria: ''
+                    lastRunDate: '2026-11-15'
+                    nextRunDate: '999999'
+                    nextInstalmentSeq: null
+                    tpaUrlId: TPA-INS-ADHOC
+                    allowedCollectionModes: [E-pay]
+                    collectionMethods: [Full]
+                    exceptions: []
+    post:
+      tags: [DCC Rules]
+      summary: Create a rule
+      description: >
+        Also the target of the JSON Payload Tester panel, which may POST
+        arbitrary rule JSON to this path. A rule with a duplicate
+        generationRuleNo is rejected.
+      operationId: createRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DccRule'
+            examples:
+              newRule:
+                $ref: '#/components/examples/DCC-R-0001'
+              testerPayload:
+                $ref: '#/components/examples/TesterPayload'
+      responses:
+        '201':
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleResponse'
+              example:
+                data:
+                  $ref: '#/components/examples/DCC-R-0001/value'
+        '409':
+          description: Rule number already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Rule DCC-R-0001 already exists
+        '405':
+          description: Unsupported operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Unsupported operation
+  /dcc/lookups:
+    get:
+      tags: [DCC Rules]
+      summary: Get dropdown lookup options
+      description: >
+        Master option lists driving all dropdown and multi-select controls in
+        the rule UI. When this endpoint is unreachable the client falls back to
+        the bundled public/data/dcc-lookups.json and then to built-in
+        constants.
+      operationId: getLookups
+      responses:
+        '200':
+          description: Lookup option lists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LookupsResponse'
+              example:
+                statuses: [Active, Inactive]
+                targetObjects: [Property, Apartment, 'Loan #', Purchase Order, Other]
+                demandTypes: [Rent, Deposit, Lease, Maint fees, Loan, Purchase, Tax, Insurance]
+                frequencies:
+                  - code: '99'
+                    label: Ad hoc by TPA
+                    group: adhoc_instalment
+                    detail: Real-time TPA API post
+                    nextRunHint: '999999'
+                  - code: '01'
+                    label: Monthly — 1st
+                    group: periodic
+                    nextRunHint: 1st of month
+                dueDateRefSources:
+                  - value: TPA
+                    hint: TPA date from JSON
+                  - value: Run
+                    hint: Actual BTM run date
+                  - value: Next
+                    hint: Next Run Date even if BTM run delayed
+                collectionModes: [E-pay, Manual, Salary Adjusted, Challan, DD]
+                collectionMethods: [Full, Partial, Installment Full, Installment Partial]
+                exceptionTypes: [Installment, Discount, Penalty, Alert]
+                percentBases: [Daily, Monthly, Yearly]
+  /dcc/rules/{ruleNo}:
+    parameters:
+      - name: ruleNo
+        in: path
+        required: true
+        description: Generation rule number, e.g. DCC-R-0001. URL-encoded by the client.
+        schema:
+          type: string
+        example: DCC-R-0001
+    get:
+      tags: [DCC Rules]
+      summary: Get a single rule
+      operationId: getRule
+      responses:
+        '200':
+          description: The rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleResponse'
+              example:
+                data:
+                  $ref: '#/components/examples/DCC-R-0001/value'
+        '404':
+          description: Rule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Rule DCC-R-9999 not found
+    put:
+      tags: [DCC Rules]
+      summary: Update a rule
+      description: Shallow merge of the provided fields onto the stored rule; generationRuleNo is taken from the path.
+      operationId: updateRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DccRule'
+            example:
+              status: Inactive
+              gracePeriodDays: 10
+      responses:
+        '200':
+          description: Updated rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleResponse'
+              example:
+                data:
+                  $ref: '#/components/examples/DCC-R-0001/value'
+        '404':
+          description: Rule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Rule DCC-R-9999 not found
+    delete:
+      tags: [DCC Rules]
+      summary: Delete a rule
+      operationId: deleteRule
+      responses:
+        '200':
+          description: The removed rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleResponse'
+              example:
+                data:
+                  $ref: '#/components/examples/DCC-R-0001/value'
+        '404':
+          description: Rule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Rule DCC-R-9999 not found
+components:
+  examples:
+    DCC-R-0001:
+      summary: Rent rule with three exception rows (from seed data)
+      value:
+        generationRuleNo: DCC-R-0001
+        status: Active
+        targetObject: Property
+        targetObjectId: PROP-10021
+        demandType: Rent
+        generationFrequencyCode: '01'
+        demandAmount: 24500
+        gstPercent: 18
+        dueDateRefSource: TPA
+        gracePeriodDays: 5
+        increaseApplicationMonths: 11
+        increasePercent: 2
+        increaseMin: 0
+        increaseMax: 10
+        increaseAlertCriteria: Alert 30 days before increase; remind every 7 days until acknowledged
+        lastRunDate: '2026-11-01'
+        nextRunDate: '2026-12-01'
+        nextInstalmentSeq: null
+        tpaUrlId: TPA-RENT-POST
+        allowedCollectionModes: [E-pay, Manual, Challan]
+        collectionMethods: [Full, Partial, Installment Full]
+        exceptions:
+          - exceptionType: Discount
+            seq: 1
+            demandSlabMin: 10000
+            demandSlabMax: 50000
+            offsetDays: 3
+            applicablePercent: 0.5
+            applicablePercentBasis: Monthly
+            applicableMin: 0
+            applicableMax: 500
+            actualAmount: null
+            messageHook: MSG-DISC-01
+            legalNotices: ''
+          - exceptionType: Penalty
+            seq: 1
+            demandSlabMin: 5000
+            demandSlabMax: null
+            offsetDays: 10
+            applicablePercent: 18
+            applicablePercentBasis: Yearly
+            applicableMin: 100
+            applicableMax: null
+            actualAmount: null
+            messageHook: MSG-PEN-01
+            legalNotices: ''
+          - exceptionType: Alert
+            seq: 1
+            demandSlabMin: null
+            demandSlabMax: null
+            offsetDays: 2
+            applicablePercent: null
+            applicablePercentBasis: null
+            applicableMin: null
+            applicableMax: null
+            actualAmount: null
+            messageHook: MSG-ALR-01
+            legalNotices: 'Dear {{tenantName}} ({{department}}), demand {{demandNo}} of {{amount}} is due on {{dueDate}}.'
+    TesterPayload:
+      summary: Default payload pre-filled in the JSON tester panel
+      value:
+        generationRuleNo: DCC-R-EXTERNAL-01
+        status: Active
+        targetObject: Property
+        targetObjectId: PROP-EXT-01
+        demandType: Rent
+        generationFrequencyCode: '01'
+        demandAmount: 10000
+        gstPercent: 18
+        dueDateRefSource: TPA
+        gracePeriodDays: 5
+        increaseApplicationMonths: null
+        increasePercent: null
+        increaseMin: null
+        increaseMax: null
+        increaseAlertCriteria: ''
+        lastRunDate: null
+        nextRunDate: '2026-12-01'
+        nextInstalmentSeq: null
+        tpaUrlId: TPA-EXTERNAL-POST
+        allowedCollectionModes: [E-pay]
+        collectionMethods: [Full]
+        exceptions: []
+  schemas:
+    FrequencyLookup:
+      type: object
+      required: [code, label, group, nextRunHint]
+      properties:
+        code:
+          type: string
+          description: Frequency code stored on rules
+          example: '01'
+        label:
+          type: string
+          example: Monthly — 1st
+        group:
+          type: string
+          enum: [periodic, adhoc_instalment]
+          description: Drives the Generation Frequency optgroup split in the editor
+        detail:
+          type: string
+          description: Optional explanatory text shown under the frequency selector
+          example: Real-time TPA API post
+        nextRunHint:
+          type: string
+          example: 1st of month
+    DueDateRefSourceLookup:
+      type: object
+      required: [value, hint]
+      properties:
+        value:
+          $ref: '#/components/schemas/DueDateRefSource'
+        hint:
+          type: string
+          example: TPA date from JSON
+    LookupsResponse:
+      type: object
+      required:
+        - statuses
+        - targetObjects
+        - demandTypes
+        - frequencies
+        - dueDateRefSources
+        - collectionModes
+        - collectionMethods
+        - exceptionTypes
+        - percentBases
+      properties:
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleStatus'
+        targetObjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/TargetObject'
+        demandTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DemandType'
+        frequencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrequencyLookup'
+        dueDateRefSources:
+          type: array
+          items:
+            $ref: '#/components/schemas/DueDateRefSourceLookup'
+        collectionModes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionMode'
+        collectionMethods:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionMethod'
+        exceptionTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExceptionType'
+        percentBases:
+          type: array
+          items:
+            $ref: '#/components/schemas/PercentBasis'
+    DemandType:
+      type: string
+      enum: [Rent, Deposit, Lease, Maint fees, Loan, Purchase, Tax, Insurance]
+    TargetObject:
+      type: string
+      enum: [Property, Apartment, 'Loan #', Purchase Order, Other]
+    DueDateRefSource:
+      type: string
+      enum: [TPA, Run, Next]
+    CollectionMode:
+      type: string
+      enum: [E-pay, Manual, Salary Adjusted, Challan, DD]
+    CollectionMethod:
+      type: string
+      enum: [Full, Partial, Installment Full, Installment Partial]
+    ExceptionType:
+      type: string
+      enum: [Installment, Discount, Penalty, Alert]
+    PercentBasis:
+      type: string
+      enum: [Daily, Monthly, Yearly]
+    RuleStatus:
+      type: string
+      enum: [Active, Inactive]
+    CollectionException:
+      type: object
+      required:
+        - exceptionType
+        - seq
+        - demandSlabMin
+        - demandSlabMax
+        - offsetDays
+        - applicablePercent
+        - applicablePercentBasis
+        - applicableMin
+        - applicableMax
+        - actualAmount
+        - messageHook
+        - legalNotices
+      properties:
+        exceptionType:
+          $ref: '#/components/schemas/ExceptionType'
+        seq:
+          type: integer
+          description: Sequence of this exception row within the rule
+          example: 1
+        demandSlabMin:
+          type: [number, 'null']
+          nullable: true
+          description: Lower bound of the demand amount slab this row applies to
+          example: 10000
+        demandSlabMax:
+          type: [number, 'null']
+          nullable: true
+          description: Upper bound of the slab; null means unbounded
+          example: 50000
+        offsetDays:
+          type: [integer, 'null']
+          nullable: true
+          description: Day offset used per exception type (see EXCEPTION_OFFSET_HINT in the app)
+          example: 3
+        applicablePercent:
+          type: [number, 'null']
+          nullable: true
+          description: Percent applied for Discount/Penalty/Installment rows
+          example: 18
+        applicablePercentBasis:
+          $ref: '#/components/schemas/PercentBasis'
+        applicableMin:
+          type: [number, 'null']
+          nullable: true
+          description: Floor for the computed amount
+          example: 100
+        applicableMax:
+          type: [number, 'null']
+          nullable: true
+          description: Ceiling for the computed amount; null means unbounded
+          example: 500
+        actualAmount:
+          type: [number, 'null']
+          nullable: true
+          description: Fixed amount used instead of a percent (typical for Installment rows)
+          example: 8500
+        messageHook:
+          type: string
+          description: Message hook identifier
+          example: MSG-PEN-01
+        legalNotices:
+          type: string
+          description: Legal notice template with {{placeholders}}
+          example: 'Dear {{tenantName}}, demand {{demandNo}} is due on {{dueDate}}.'
+    DccRule:
+      type: object
+      required:
+        - generationRuleNo
+        - status
+        - targetObject
+        - targetObjectId
+        - demandType
+        - generationFrequencyCode
+        - demandAmount
+        - gstPercent
+        - dueDateRefSource
+        - gracePeriodDays
+        - increaseApplicationMonths
+        - increasePercent
+        - increaseMin
+        - increaseMax
+        - increaseAlertCriteria
+        - lastRunDate
+        - nextRunDate
+        - nextInstalmentSeq
+        - tpaUrlId
+        - allowedCollectionModes
+        - collectionMethods
+        - exceptions
+      properties:
+        generationRuleNo:
+          type: string
+          description: Unique rule identifier, format DCC-R-NNNN
+          example: DCC-R-0001
+        status:
+          $ref: '#/components/schemas/RuleStatus'
+        targetObject:
+          $ref: '#/components/schemas/TargetObject'
+        targetObjectId:
+          type: string
+          description: Identifier of the object the rule targets
+          example: PROP-10021
+        demandType:
+          $ref: '#/components/schemas/DemandType'
+        generationFrequencyCode:
+          type: string
+          description: Frequency code (see API description for the full code table)
+          example: '01'
+        demandAmount:
+          type: [number, 'null']
+          nullable: true
+          description: Fixed demand amount; null when computed per instalment
+          example: 24500
+        gstPercent:
+          type: [number, 'null']
+          nullable: true
+          description: GST percentage applied to the demand
+          example: 18
+        dueDateRefSource:
+          $ref: '#/components/schemas/DueDateRefSource'
+        gracePeriodDays:
+          type: integer
+          description: Grace period before penalties apply
+          example: 5
+        increaseApplicationMonths:
+          type: [integer, 'null']
+          nullable: true
+          description: Months between increase applications
+          example: 11
+        increasePercent:
+          type: [number, 'null']
+          nullable: true
+          description: Percent increase to apply
+          example: 2
+        increaseMin:
+          type: [number, 'null']
+          nullable: true
+          description: Minimum increase floor
+          example: 0
+        increaseMax:
+          type: [number, 'null']
+          nullable: true
+          description: Maximum increase ceiling
+          example: 10
+        increaseAlertCriteria:
+          type: string
+          description: Free-text alert criteria for increases
+          example: Alert 30 days before increase
+        lastRunDate:
+          type: [string, 'null']
+          nullable: true
+          format: date
+          description: Date of the last generation run
+          example: '2026-11-01'
+        nextRunDate:
+          type: [string, 'null']
+          nullable: true
+          description: Next run date; sentinel values 999999/999998 for ad hoc TPA/Excel
+          example: '2026-12-01'
+        nextInstalmentSeq:
+          type: [integer, 'null']
+          nullable: true
+          description: Next instalment sequence for instalment-frequency rules
+          example: 7
+        tpaUrlId:
+          type: string
+          description: Identifier of the TPA post URL
+          example: TPA-RENT-POST
+        allowedCollectionModes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionMode'
+          example: [E-pay, Manual, Challan]
+        collectionMethods:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionMethod'
+          example: [Full, Partial, Installment Full]
+        exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionException'
+    RuleListResponse:
+      type: object
+      required: [data, count, total]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DccRule'
+        count:
+          type: integer
+          description: Number of rules in the response
+          example: 8
+        total:
+          type: integer
+          description: Total number of rules in the store
+          example: 8
+    RuleResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/DccRule'
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Rule DCC-R-0001 already exists

@@ -1,0 +1,480 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-11-26T17:15:36.615Z",
+  "rules": [
+    {
+      "generationRuleNo": "DCC-R-0001",
+      "status": "Active",
+      "targetObject": "Property",
+      "targetObjectId": "PROP-10021",
+      "demandType": "Rent",
+      "generationFrequencyCode": "01",
+      "demandAmount": 24500,
+      "gstPercent": 18,
+      "dueDateRefSource": "TPA",
+      "gracePeriodDays": 5,
+      "increaseApplicationMonths": 11,
+      "increasePercent": 2,
+      "increaseMin": 0,
+      "increaseMax": 10,
+      "increaseAlertCriteria": "Alert 30 days before increase; remind every 7 days until acknowledged",
+      "lastRunDate": "2026-11-01",
+      "nextRunDate": "2026-12-01",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-RENT-POST",
+      "allowedCollectionModes": [
+        "E-pay",
+        "Manual",
+        "Challan",
+        "DD"
+      ],
+      "collectionMethods": [
+        "Full",
+        "Partial",
+        "Installment Full"
+      ],
+      "exceptions": [
+        {
+          "exceptionType": "Discount",
+          "seq": 1,
+          "demandSlabMin": 10000,
+          "demandSlabMax": 50000,
+          "offsetDays": 3,
+          "applicablePercent": 0.5,
+          "applicablePercentBasis": "Monthly",
+          "applicableMin": 0,
+          "applicableMax": 500,
+          "actualAmount": null,
+          "messageHook": "MSG-DISC-01",
+          "legalNotices": ""
+        },
+        {
+          "exceptionType": "Penalty",
+          "seq": 1,
+          "demandSlabMin": 5000,
+          "demandSlabMax": null,
+          "offsetDays": 10,
+          "applicablePercent": 18,
+          "applicablePercentBasis": "Yearly",
+          "applicableMin": 100,
+          "applicableMax": null,
+          "actualAmount": null,
+          "messageHook": "MSG-PEN-01",
+          "legalNotices": ""
+        },
+        {
+          "exceptionType": "Alert",
+          "seq": 1,
+          "demandSlabMin": null,
+          "demandSlabMax": null,
+          "offsetDays": 2,
+          "applicablePercent": null,
+          "applicablePercentBasis": null,
+          "applicableMin": null,
+          "applicableMax": null,
+          "actualAmount": null,
+          "messageHook": "MSG-ALR-01",
+          "legalNotices": "Dear {{tenantName}} ({{department}}), demand {{demandNo}} of {{amount}} is due on {{dueDate}}."
+        }
+      ]
+    },
+    {
+      "generationRuleNo": "DCC-R-0002",
+      "status": "Active",
+      "targetObject": "Apartment",
+      "targetObjectId": "APT-305-B",
+      "demandType": "Maint fees",
+      "generationFrequencyCode": "41",
+      "demandAmount": 120,
+      "gstPercent": 18,
+      "dueDateRefSource": "Run",
+      "gracePeriodDays": 2,
+      "increaseApplicationMonths": null,
+      "increasePercent": null,
+      "increaseMin": null,
+      "increaseMax": null,
+      "increaseAlertCriteria": "",
+      "lastRunDate": "2026-11-19",
+      "nextRunDate": "2026-11-20",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-MAINT-POST",
+      "allowedCollectionModes": [
+        "E-pay",
+        "Salary Adjusted"
+      ],
+      "collectionMethods": [
+        "Full",
+        "Installment Partial"
+      ],
+      "exceptions": [
+        {
+          "exceptionType": "Penalty",
+          "seq": 1,
+          "demandSlabMin": null,
+          "demandSlabMax": null,
+          "offsetDays": 5,
+          "applicablePercent": 2,
+          "applicablePercentBasis": "Monthly",
+          "applicableMin": 10,
+          "applicableMax": 200,
+          "actualAmount": null,
+          "messageHook": "MSG-PEN-02",
+          "legalNotices": ""
+        }
+      ]
+    },
+    {
+      "generationRuleNo": "DCC-R-0003",
+      "status": "Active",
+      "targetObject": "Loan #",
+      "targetObjectId": "LN-8842",
+      "demandType": "Loan",
+      "generationFrequencyCode": "95",
+      "demandAmount": null,
+      "gstPercent": 0,
+      "dueDateRefSource": "TPA",
+      "gracePeriodDays": 0,
+      "increaseApplicationMonths": null,
+      "increasePercent": null,
+      "increaseMin": null,
+      "increaseMax": null,
+      "increaseAlertCriteria": "",
+      "lastRunDate": "2026-11-18",
+      "nextRunDate": "2026-12-05",
+      "nextInstalmentSeq": 7,
+      "tpaUrlId": "TPA-LOAN-INST",
+      "allowedCollectionModes": [
+        "Salary Adjusted",
+        "E-pay"
+      ],
+      "collectionMethods": [
+        "Installment Full",
+        "Installment Partial"
+      ],
+      "exceptions": [
+        {
+          "exceptionType": "Installment",
+          "seq": 1,
+          "demandSlabMin": 1000,
+          "demandSlabMax": 50000,
+          "offsetDays": 15,
+          "applicablePercent": null,
+          "applicablePercentBasis": null,
+          "applicableMin": null,
+          "applicableMax": null,
+          "actualAmount": 8500,
+          "messageHook": "",
+          "legalNotices": ""
+        },
+        {
+          "exceptionType": "Installment",
+          "seq": 2,
+          "demandSlabMin": 50000,
+          "demandSlabMax": 200000,
+          "offsetDays": 30,
+          "applicablePercent": 25,
+          "applicablePercentBasis": "Monthly",
+          "applicableMin": null,
+          "applicableMax": 25000,
+          "actualAmount": null,
+          "messageHook": "",
+          "legalNotices": ""
+        }
+      ]
+    },
+    {
+      "generationRuleNo": "DCC-R-0004",
+      "status": "Active",
+      "targetObject": "Property",
+      "targetObjectId": "PROP-10088",
+      "demandType": "Tax",
+      "generationFrequencyCode": "89",
+      "demandAmount": 18750,
+      "gstPercent": 0,
+      "dueDateRefSource": "Next",
+      "gracePeriodDays": 15,
+      "increaseApplicationMonths": null,
+      "increasePercent": null,
+      "increaseMin": null,
+      "increaseMax": null,
+      "increaseAlertCriteria": "",
+      "lastRunDate": "2026-04-01",
+      "nextRunDate": "2027-04-01",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-TAX-FIXED",
+      "allowedCollectionModes": [
+        "Challan",
+        "DD"
+      ],
+      "collectionMethods": [
+        "Full"
+      ],
+      "exceptions": []
+    },
+    {
+      "generationRuleNo": "DCC-R-0005",
+      "status": "Inactive",
+      "targetObject": "Property",
+      "targetObjectId": "PROP-10114",
+      "demandType": "Insurance",
+      "generationFrequencyCode": "99",
+      "demandAmount": 6400,
+      "gstPercent": 12,
+      "dueDateRefSource": "TPA",
+      "gracePeriodDays": 0,
+      "increaseApplicationMonths": null,
+      "increasePercent": null,
+      "increaseMin": null,
+      "increaseMax": null,
+      "increaseAlertCriteria": "",
+      "lastRunDate": "2026-11-15",
+      "nextRunDate": "999999",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-INS-ADHOC",
+      "allowedCollectionModes": [
+        "E-pay"
+      ],
+      "collectionMethods": [
+        "Full"
+      ],
+      "exceptions": []
+    },
+    {
+      "generationRuleNo": "DCC-R-0006",
+      "status": "Active",
+      "targetObject": "Property",
+      "targetObjectId": "PROP-10130",
+      "demandType": "Purchase",
+      "generationFrequencyCode": "98",
+      "demandAmount": 450000,
+      "gstPercent": 5,
+      "dueDateRefSource": "TPA",
+      "gracePeriodDays": 30,
+      "increaseApplicationMonths": null,
+      "increasePercent": null,
+      "increaseMin": null,
+      "increaseMax": null,
+      "increaseAlertCriteria": "",
+      "lastRunDate": null,
+      "nextRunDate": "999998",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-PUR-EXCEL",
+      "allowedCollectionModes": [
+        "Manual",
+        "DD",
+        "Challan"
+      ],
+      "collectionMethods": [
+        "Full",
+        "Partial"
+      ],
+      "exceptions": [
+        {
+          "exceptionType": "Discount",
+          "seq": 1,
+          "demandSlabMin": 100000,
+          "demandSlabMax": null,
+          "offsetDays": 7,
+          "applicablePercent": 1,
+          "applicablePercentBasis": "Yearly",
+          "applicableMin": null,
+          "applicableMax": 5000,
+          "actualAmount": null,
+          "messageHook": "MSG-DISC-04",
+          "legalNotices": ""
+        }
+      ]
+    },
+    {
+      "generationRuleNo": "DCC-R-0007",
+      "status": "Active",
+      "targetObject": "Apartment",
+      "targetObjectId": "APT-112-A",
+      "demandType": "Lease",
+      "generationFrequencyCode": "51",
+      "demandAmount": 9200,
+      "gstPercent": 18,
+      "dueDateRefSource": "TPA",
+      "gracePeriodDays": 3,
+      "increaseApplicationMonths": 12,
+      "increasePercent": 4,
+      "increaseMin": 2,
+      "increaseMax": 8,
+      "increaseAlertCriteria": "Initial alert 45 days before escalation; 2 reminders weekly",
+      "lastRunDate": "2026-11-16",
+      "nextRunDate": "2026-11-23",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-LEASE-POST",
+      "allowedCollectionModes": [
+        "E-pay",
+        "Manual"
+      ],
+      "collectionMethods": [
+        "Full",
+        "Partial"
+      ],
+      "exceptions": [
+        {
+          "exceptionType": "Alert",
+          "seq": 1,
+          "demandSlabMin": null,
+          "demandSlabMax": null,
+          "offsetDays": 5,
+          "applicablePercent": null,
+          "applicablePercentBasis": null,
+          "applicableMin": null,
+          "applicableMax": null,
+          "actualAmount": null,
+          "messageHook": "MSG-ALR-03",
+          "legalNotices": "Notice to {{tenantName}} / {{department}}: lease demand {{demandNo}} overdue. Amount {{amount}}, due {{dueDate}}."
+        }
+      ]
+    },
+    {
+      "generationRuleNo": "DCC-R-0008",
+      "status": "Active",
+      "targetObject": "Loan #",
+      "targetObjectId": "LN-9021",
+      "demandType": "Loan",
+      "generationFrequencyCode": "70",
+      "demandAmount": 15800,
+      "gstPercent": 0,
+      "dueDateRefSource": "Run",
+      "gracePeriodDays": 7,
+      "increaseApplicationMonths": null,
+      "increasePercent": null,
+      "increaseMin": null,
+      "increaseMax": null,
+      "increaseAlertCriteria": "",
+      "lastRunDate": "2026-11-15",
+      "nextRunDate": "2026-11-30",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-LOAN-FORT",
+      "allowedCollectionModes": [
+        "Salary Adjusted"
+      ],
+      "collectionMethods": [
+        "Installment Full"
+      ],
+      "exceptions": [
+        {
+          "exceptionType": "Penalty",
+          "seq": 1,
+          "demandSlabMin": null,
+          "demandSlabMax": null,
+          "offsetDays": 12,
+          "applicablePercent": 14,
+          "applicablePercentBasis": "Yearly",
+          "applicableMin": 50,
+          "applicableMax": 1000,
+          "actualAmount": null,
+          "messageHook": "MSG-PEN-07",
+          "legalNotices": ""
+        },
+        {
+          "exceptionType": "Alert",
+          "seq": 1,
+          "demandSlabMin": null,
+          "demandSlabMax": null,
+          "offsetDays": 3,
+          "applicablePercent": null,
+          "applicablePercentBasis": null,
+          "applicableMin": null,
+          "applicableMax": null,
+          "actualAmount": null,
+          "messageHook": "MSG-ALR-09",
+          "legalNotices": "{{tenantName}} ({{department}}): salary adjustment for {{demandNo}} will deduct {{amount}} on {{dueDate}}."
+        }
+      ]
+    },
+    {
+      "generationRuleNo": "DCC-R-0009",
+      "status": "Active",
+      "targetObject": "Property",
+      "targetObjectId": "PROP-10205",
+      "demandType": "Deposit",
+      "generationFrequencyCode": "75",
+      "demandAmount": 50000,
+      "gstPercent": 18,
+      "dueDateRefSource": "Next",
+      "gracePeriodDays": 10,
+      "increaseApplicationMonths": null,
+      "increasePercent": null,
+      "increaseMin": null,
+      "increaseMax": null,
+      "increaseAlertCriteria": "",
+      "lastRunDate": "2026-10-01",
+      "nextRunDate": "2027-01-01",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-DEP-QTR",
+      "allowedCollectionModes": [
+        "E-pay",
+        "Challan"
+      ],
+      "collectionMethods": [
+        "Full"
+      ],
+      "exceptions": []
+    },
+    {
+      "generationRuleNo": "DCC-R-0010",
+      "status": "Active",
+      "targetObject": "Apartment",
+      "targetObjectId": "APT-207-C",
+      "demandType": "Maint fees",
+      "generationFrequencyCode": "42",
+      "demandAmount": 85,
+      "gstPercent": 18,
+      "dueDateRefSource": "Run",
+      "gracePeriodDays": 1,
+      "increaseApplicationMonths": null,
+      "increasePercent": null,
+      "increaseMin": null,
+      "increaseMax": null,
+      "increaseAlertCriteria": "",
+      "lastRunDate": "2026-11-19",
+      "nextRunDate": "2026-11-24",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "TPA-MAINT-POST",
+      "allowedCollectionModes": [
+        "E-pay"
+      ],
+      "collectionMethods": [
+        "Partial",
+        "Installment Partial"
+      ],
+      "exceptions": []
+    },
+    {
+      "generationRuleNo": "DCC-R-0011",
+      "status": "Active",
+      "targetObject": "Property",
+      "targetObjectId": "Quarters",
+      "demandType": "Rent",
+      "generationFrequencyCode": "01",
+      "demandAmount": 5000,
+      "gstPercent": 5,
+      "dueDateRefSource": "TPA",
+      "gracePeriodDays": 5,
+      "increaseApplicationMonths": 6,
+      "increasePercent": 5,
+      "increaseMin": 2,
+      "increaseMax": 5,
+      "increaseAlertCriteria": "",
+      "lastRunDate": "2026-11-26",
+      "nextRunDate": "2026-12-26",
+      "nextInstalmentSeq": null,
+      "tpaUrlId": "",
+      "allowedCollectionModes": [
+        "E-pay",
+        "Manual",
+        "Challan"
+      ],
+      "collectionMethods": [
+        "Full",
+        "Partial"
+      ],
+      "exceptions": []
+    }
+  ]
+}
